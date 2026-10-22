@@ -20,7 +20,8 @@ node --test "tests/*.test.js"
 - `signals` 探针必须跳过 `unpackage`、`node_modules`、`.mimocode`、`uni_modules`，否则第三方插件（`mp-html`、`uni-popup`）会伪造 IM/录音/支付信号。（`scan.js` 另跳过 `static`、`vendor` 与 `libs/dist/build/addons` 等 vendored 目录名。）
 - `displayName` 来自 `manifest.json.name`，它有时是客户品牌名或内部编号（`蓝牙设备`、`星级评定1.0版`），泛称由 `NAME_OVERRIDE`（`scripts/curate.js`）人工覆盖。
 - 页面产物为生成物，手改会被覆盖；`points[].依据` 指向兄弟项目目录，重构兄弟项目后需重跑断言。
-- `portfolio/.kilo/worktrees/` 是工具副本（34k 文件），扫描与 grep 都要排除，也不要删。`.superpowers/` 是各次重构的计划与 SDD 台账（任务简报、实现报告、评审 diff、我的裁定记账），**搬迁后已移出版本控制、只在本机存在** —— 这份仓里查不到它，别按图索骥；扫描与 grep 同样排除、勿删。`data/projects.json` 也移出了跟踪（它是扫描派生物，含被扫仓库全部目录名与提交日期），fresh clone 里没有这个文件，跑 `node scripts/scan.js` 才会出现。
+- `.superpowers/` 是各次重构的计划与 SDD 台账（任务简报、实现报告、评审 diff、我的裁定记账），**搬迁后已移出版本控制、只在本机存在** —— 这份仓里查不到它，别按图索骥；扫描与 grep 同样排除、勿删。`data/projects.json` 也移出了跟踪（它是扫描派生物，含被扫仓库全部目录名与提交日期），所以 **clone 后必须先 `node scripts/scan.js`** 才谈得上跑套件（`scan.test.js` 直接读它，`gate.test.js` 经 `build.js` 间接读它）。旧文档写的 `.kilo/worktrees/`「34k 文件」在两仓的 git 树里都是 0 个文件 —— 那句是历史遗留，别去找它；`scan.js` 的 `EXCLUDE_DIRS` 仍列着 `.kilo`，留着无害。
+- `tests/scan-root.test.js` 的 `测试必须在干净扫描环境下跑` 在搬迁后**换了判据**：旧位置判「env 或配置文件存在即脏」；新位置配置文件是必需项，于是它判**两条显式来源是否互相矛盾** —— env 与 `scan-root.local.json` 同时存在且指向不同目录就抛（解析器按优先级取 env，不拦就等于套件测的不是你以为的那个仓），配置文件存在却读不出非空 `root` 也直接抛。**不再有永久 skip 的用例。**
 - 这是一个**个人简历页**，不是仓库统计报表：首页「关于」写自我介绍（角色、方向、工作方式），「技术」写一份招聘口径的通用前端技术栈（`content/site.js` 的 `SITE.techStack`，六组）。两处都不做扫描核对、不带「来自 N 个项目」那种计数 —— 自我描述不需要仓库背书，`assertContext` 只校验形状（分组有名、条目是非空字符串）。历史上做过两版证据机制（技术块直接投影扫描计数 → 每条带 `依据` 核实测），2026-10-14 按用户要求全部撤掉，`scan.js` 为它加的五条前端向探针也一并回退。
 - 数字仍然有它们的位置：精选项目的「N 页」、详情页的形态与技术列、页面描述里的项目总数，都由 `scan.js` + `curate.js` 派生，禁止手写。`stats.projects` 用合并口径（81）不是目录数（90），这条有守卫。
 - 首页**没有归档模块**（用户要求移除，测试里有反向断言钉住）：`curate()` 仍返回 `archive` 与 `stats`，但只有 `stats.projects` 被 `<meta description>` 用着，38 个未入选项目不再上站，全量数据仍在 `data/projects.json`。

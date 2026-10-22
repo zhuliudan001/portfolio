@@ -4,6 +4,9 @@
 
 ## 用法
 
+**clone 完的顺序是 scan → build → test，不能跳。** `data/projects.json` 是扫描派生物、不入库：
+`tests/scan.test.js` 直接读它，`gate.test.js` 经 `build.js` 间接读它，先跑 `scan.js` 才有东西可测。
+
 node scripts/scan.js      # 只读扫描「扫描根」（见下一节）→ data/projects.json
 node scripts/build.js     # 生成 index.html 与 case/*.html
 node --test "tests/*.test.js"        # 断言：分类、去重、对比度、依据路径
@@ -27,6 +30,10 @@ python -m http.server 8080 # 或直接双击 index.html（file:// 可用）
 
 显式指定的那条路（env 或配置文件）本身指向不可扫的目录时同样抛错，不会被别的候选悄悄换掉 ——
 构建成功但扫错仓库的产物，比一条报错难查得多。
+
+**优先级有个必须先修再跑的细节**：配置文件只要存在就会被读取，所以它哪怕 JSON 写坏、`root` 为空，
+也会让构建直接抛错 —— **即使 env 已经给了正确路径，也救不回来**。方向是「更大声」，不是静默，
+但别把它读成「有 env 就可以不管那个文件」。先修好或删掉它。
 
 ## 改内容
 

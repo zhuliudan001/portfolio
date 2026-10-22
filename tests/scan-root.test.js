@@ -22,6 +22,17 @@ const computesTwoLevels = (line) => /__dirname/.test(line) && (line.match(/\.\./
    污染」，所以 env 值与 config 是否存在都必须在模块作用域求值，否则照样受用例顺序影响。 */
 const ENV_AT_LOAD = process.env[SCAN_ROOT_ENV];
 const CONFIG_AT_LOAD = fs.existsSync(LOCAL_CONFIG_FILE);
+/* 搬迁后配置文件是本机必需项，「脏」的定义随之改变：不再是「它存在」，而是「两条显式来源互相矛盾」。
+   这里只取它的 root 用来比对 —— 不做 ../..、不绕过解析器，所以不构成第二处扫描根计算。
+   相对写法按配置文件所在目录展开，与解析器同法，否则比对会假红。 */
+const CONFIG_ROOT_AT_LOAD = (() => {
+  if (!CONFIG_AT_LOAD) return null;
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(LOCAL_CONFIG_FILE, 'utf8')).root; } catch (e) { return 'unreadable'; }
+  return (typeof raw === 'string' && raw.trim())
+    ? path.resolve(path.dirname(LOCAL_CONFIG_FILE), raw.trim())
+    : 'unreadable';
+})();
 
 const tmp = [];
 test.after(() => { tmp.forEach((d) => fs.rmSync(d, { recursive: true, force: true })); });
@@ -179,39 +190,45 @@ test('显式配置文件指向不可扫目录时同样抛，且报错点名 loca
     '配置文件里写错了路径时，defaultRoot 不该把它救回来');
 });
 
-test('scan.js 与 build.js 不再自己算 ../..，一律走解析器', () => {
-  for (const rel of ['../scripts/scan.js', '../scripts/build.js']) {
-    const src = fs.readFileSync(path.resolve(__dirname, rel), 'utf8');
+test('scripts/ 全目录都不得自己算上级的扫描根，一律走解析器', () => {
+  const dir = path.resolve(__dirname, '../scripts');
+  // 解析器是唯一被允许做上级展开的文件；其余 .js（含今后新建的）全部纳管。
+  // 旧写法是硬写两个文件名 —— 那等于「8 个脚本守 2 个」，新加一个脚本就能悄悄长出第二处计算。
+  const OWNER = 'scan-root.js';
+  for (const rel of ['scan.js', 'build.js']) {
+    const src = fs.readFileSync(path.join(dir, rel), 'utf8');
     assert.ok(/require\(['"]\.\/scan-root\.js['"]\)/.test(src), `${rel} 没引 scan-root.js`);
-    // 谓词是逐行数「本目录变量 + 至少两个上级段」的，它分不清那一行是代码还是注释，
-    // 所以报错必须点名命中行号 —— 不然人会对着一条没有出处的红盲改注释。
-    const hits = src.split('\n')
-      .map((line, i) => (computesTwoLevels(line) ? i + 1 : 0))
-      .filter((n) => n > 0);
-    assert.deepStrictEqual(hits, [],
-      `${rel} 仍自己写 path.resolve(__dirname, '../..') —— 命中行号：${hits.join(', ')}\n`
-      + '  两处各算一次早晚变成两套事实。\n'
-      + '  注释里把本目录变量与两个上级段写在同一行同样算命中，这是有意的 —— 要解释为什么禁止这种写法，\n'
-      + '  就用文字描述写法（scan-root.js 的 candidates/pick 是唯一的根），别在这一行写出可执行的形状。');
   }
+  const hitLines = (src) => src.split('\n')
+    .map((line, i) => (computesTwoLevels(line) ? i + 1 : 0))
+    .filter((n) => n > 0);
+  const offenders = fs.readdirSync(dir)
+    .filter((f) => f.endsWith('.js') && f !== OWNER)
+    .map((f) => ({ file: f, lines: hitLines(fs.readFileSync(path.join(dir, f), 'utf8')) }))
+    .filter((e) => e.lines.length > 0);
+  assert.deepStrictEqual(offenders, [],
+    `这些脚本仍自己算上级的根（命中行号点名）：${offenders.map((e) => `${e.file}:${e.lines.join(',')}`).join(' ')}\n`
+      + '  两处各算一次早晚变成两套事实；根只有一个所有者，就是同目录的解析器。\n'
+      + '  注意谓词分不清代码与注释：把本目录变量与两个上级段写进同一行就算命中，'
+      + '要解释为什么禁止这种写法就用文字描述，别在这一行写出可执行的形状。');
 });
 
 test('tests/ 里不得再出现第二处扫描根计算', () => {
   const dir = path.resolve(__dirname, '..', 'tests');
   const self = path.basename(__filename);
-  /* 本文件豁免必须逐行核销，不许整文件放行：../.. 这条字面量在这里出现两次是有意为之 ——
-     一次是「DEFAULT_ROOT 必须等于 ../..」的金丝雀（字面量本身就是被测对象），一次是上一条
-     守卫的报错文案。两处都在期望值/字符串位置，不是第二处解析；本文件若再新增第三处，照红。 */
+  /* 本文件豁免必须逐行核销，不许整文件放行：谓词在本文件只命中一条真实代码行 ——
+     「DEFAULT_ROOT 必须等于 ../..」的金丝雀（那串字面量本身就是被测对象）。
+     上一条守卫原先的报错文案也命中过一行，Task 4 之后它改成文字描述写法，命中随之消失；
+     若再新增第二处，照红。 */
   const SELF_EXEMPT = [
     "assert.strictEqual(DEFAULT_ROOT, path.resolve(__dirname, '../..')",
-    "仍自己写 path.resolve(__dirname, '../..')",
   ];
   // 条数核销（Task 4 Step 1c）：白名单一旦可扩，「每条片段各命中 1 行」就拦不住松动 ——
   // 加一条能匹配现有某行真实代码的片段，逐条命中数照样满足，豁免表每多一行锁就松一分。
-  // 所以这里钉成恰好两条。要加第三条，必须先让那条 ../.. 计算有正当理由并同步改本断言 ——
-  // 这是一次可见的决定，不是顺手贴字符串。
-  assert.strictEqual(SELF_EXEMPT.length, 2,
-    `SELF_EXEMPT 有 ${SELF_EXEMPT.length} 条，本守卫只豁免上面两处已核销的字符串位：`
+  // 所以这里钉成恰好一条（2026-10-22 终审后从两条降到一条：删掉的是那条已不再命中的旧文案）。
+  // 要加第二条，必须先让那处上级计算有正当理由并同步改本断言 —— 这是一次可见的决定，不是顺手贴字符串。
+  assert.strictEqual(SELF_EXEMPT.length, 1,
+    `SELF_EXEMPT 有 ${SELF_EXEMPT.length} 条，本守卫只豁免那一条已核销的金丝雀行：`
     + '新增豁免=新增一处扫描根计算，先想清楚它凭什么正当，再连同本断言一起改');
   // 命中数必须核销：某片段命中 0 行说明白名单与被测代码已脱钩（文案被改），命中 >1 说明豁免在扩散。
   // 白名单条目自身的声明行也算「包含该片段」，须先剔掉，否则每条恒为 2 —— 剔完仍要求恰好命中 1 行
@@ -222,7 +239,7 @@ test('tests/ 里不得再出现第二处扫描根计算', () => {
      不归一化就会让那条片段多算一行命中，报出「已脱钩」这句误导的红，或者把声明行自己
      当成一处扫描根计算。归一化只认「整行就是一条条目」这种形状：剥行尾注释 → 剥尾随逗号 →
      剥成对的外层引号 → 还原 \' / \" 转义（片段里带引号时换引号必须转义）。
-     被豁免的那两条代码行不以引号开头，所以永远不会被误判成声明行。 */
+     被豁免的那条代码行不以引号开头，所以永远不会被误判成声明行。 */
   const asEntry = (line) => {
     let t = line.trim().replace(/\/\/.*$/, '').trim();  // 剥行尾注释（注释前常留一个空格，故再 trim 一次）
     t = t.replace(/,+$/, '').trim();                    // 剥尾随逗号
@@ -254,25 +271,28 @@ test('tests/ 里不得再出现第二处扫描根计算', () => {
     `这些测试仍自己算 ../.. ：${offenders.map((f) => path.basename(f)).join(', ')}`);
 });
 
-/* 套件的确定性此刻挂在环境上，不在代码里 —— 与其悄悄清理，不如拒绝在脏环境下跑。
-   见 Task 2 评审：import 期解析是 T1 的优先级契约，代价就是这条。 */
+/* 套件的确定性挂在环境上，不在代码里（scan.js/build.js 是 import 期解析）——
+   与其悄悄清理，不如在来源互相矛盾时拒绝跑。判据在搬迁前后是两个意思：
+   旧位置「配置文件存在」本身就是脏（会把套件带走扫别处）；新位置它是必需项，
+   于是真正会骗人的形状变成「env 与配置文件同时存在且指向不同目录」—— 解析器按优先级取 env，
+   开发者以为自己在测配置文件指的那个仓。终审裁定：这条必须在新家仍然会咬，不许永久空转。 */
 test('测试必须在干净扫描环境下跑', (t) => {
-  // 这条只管搬迁前：旧位置里本机配置是「脏环境」，因为 import 期解析会跟着它换仓库。
-  // 搬迁后 DEFAULT_ROOT 不再是 git 仓库，配置反而是必需项 —— 此时硬断言会把 Task 5 的
-  // 全量绿变成不可能达成，所以按事实状态跳过，而不是留个人去删断言。
-  // 已知差异（Task 4 Step 1d③，判据此处刻意不改）：解析器认定一个可用根要 `.git` **且**
-  // 至少一个可扫描子项目（scripts/scan-root.js 的 inspect），而这里的自解除只看 `.git`。
-  // 于是「搬迁后默认根碰巧有 .git、却没有可扫项目」这种状态里，配置仍是必需项而本守卫不会跳过 ——
-  // 那是偏严（多报一次脏环境），不是偏松（放过脏环境），所以留着；搬迁后的真实形状由 Task 5 实测确认它确实 skip。
-  if (!fs.existsSync(path.join(DEFAULT_ROOT, '.git'))) {
-    return t.skip(`DEFAULT_ROOT=${DEFAULT_ROOT} 不是 git 仓库：已搬迁，本机扫描根配置是必需项`);
-  }
-  // 断言读的是本文件加载时的快照 ENV_AT_LOAD / CONFIG_AT_LOAD，不是测试体执行时的实时值：
+  // 断言读的是本文件加载时的快照 ENV_AT_LOAD / CONFIG_ROOT_AT_LOAD，不是测试体执行时的实时值：
   // 守卫生命周期锚在「import 期解析有没有被污染」，同文件其它用例会临时改这两个来源。
-  assert.strictEqual(ENV_AT_LOAD, undefined,
-    `检测到 ${SCAN_ROOT_ENV}=${ENV_AT_LOAD}（读的是本文件加载时的快照）：unset 它再跑套件，`
-    + '否则 scan.js/build.js 在 import 期就会改扫别处，同一套件测的不是同一个仓库');
-  assert.ok(!CONFIG_AT_LOAD,
-    `检测到 ${LOCAL_CONFIG_FILE} 存在（读的是本文件加载时的快照）：它会让 import 期解析指向本机配置。`
-    + '搬迁完成前跑套件请先移走它（DEFAULT_ROOT 一旦不再是 git 仓库，此守卫按上面的判据自动跳过）');
+  const envRoot = (ENV_AT_LOAD && ENV_AT_LOAD.trim())
+    ? path.resolve(ENV_AT_LOAD.trim()) : null;
+  if (CONFIG_AT_LOAD && CONFIG_ROOT_AT_LOAD === 'unreadable') {
+    throw new Error(`${LOCAL_CONFIG_FILE} 存在却读不出非空的 root —— 它必须是 {"root": "路径"}。`
+      + '坏配置文件会连同 env 一起把 import 期解析炸掉，先修它再跑套件。');
+  }
+  const cfgRoot = CONFIG_AT_LOAD ? CONFIG_ROOT_AT_LOAD : null;
+  if (envRoot && cfgRoot && envRoot !== cfgRoot) {
+    throw new Error(`两条显式来源指向不同仓库：${SCAN_ROOT_ENV}=${envRoot} 而 ${LOCAL_CONFIG_FILE} → ${cfgRoot}。`
+      + '解析器会取 env，于是同一套件测的不是你以为的那个仓库 —— 二者留一个，或把它们对齐。');
+  }
+  if (!envRoot && !cfgRoot && !fs.existsSync(path.join(DEFAULT_ROOT, '.git'))) {
+    throw new Error(`两条显式来源都没有，而默认值 ../.. = ${DEFAULT_ROOT} 也不是 git 仓库：`
+      + `按 README 设 ${SCAN_ROOT_ENV} 或写 ${LOCAL_CONFIG_FILE} 再跑。`);
+  }
+  return t.diagnostic(`扫描根来源：${envRoot ? `env=${envRoot}` : (cfgRoot ? `config=${cfgRoot}` : `default=${DEFAULT_ROOT}`)}`);
 });

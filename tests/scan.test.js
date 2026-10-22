@@ -143,7 +143,10 @@ test('批量 git 归属对真实历史正确：多个目录的 commits/lastCommi
     perDir('.'); // 先确认这里确实是 git 仓库，否则整条用例跳过
   } catch (e) { t.skip('无可用 git 环境，跳过真实历史核对'); return; }
   const map = gitLogByDir(repoRoot);
-  const dirs = ['portfolio', 'scripts', 'content', 'xcx-master', '健身']; // 顶层与中文目录混合
+  // 抽样必须是「真有其历史」的目录。旧清单里的 scripts/ 与 content/ 是大仓顶层并不存在的名字，
+  // 两边都数出 0，比对恒真、等于没测。现在这五个都有提交，其中 portfolio 只在历史里存在
+  // （迁仓后工作树已无此目录）—— 那正是批量归属必须照样算对的一种形状。
+  const dirs = ['水利地图', '体检', '数字人才签约码', 'xcx-master', 'portfolio'];
   for (const d of dirs) {
     const list = perDir(d);
     const want = { lastCommit: list[0] || '', commits: list.length };
@@ -253,13 +256,16 @@ test('CLI 守护：扫描根不可读时 exit(1) 且不覆盖 data/projects.json
   ].join('\n'), 'utf8');
   const repoRoot = require('../scripts/scan-root.js').resolveScanRoot(); // 与 scan.js 同一个解析器
   const artifact = path.resolve(__dirname, '../data/projects.json');
-  const before = fs.readFileSync(artifact, 'utf8');
+  // data/projects.json 迁仓后是未跟踪派生物，fresh clone 里可能根本不存在。
+  // 缺它时「不覆盖」的正确说法是「不许凭空建出来」，所以存在性与内容都要守住。
+  const readArtifact = () => (fs.existsSync(artifact) ? fs.readFileSync(artifact, 'utf8') : null);
+  const before = readArtifact();
   const res = cp.spawnSync(process.execPath,
     ['--require', preload, path.resolve(__dirname, '../scripts/scan.js')],
     { encoding: 'utf8', env: Object.assign({}, process.env, { KX_STUB_UNREADABLE: repoRoot }) });
   assert.notStrictEqual(res.status, 0, '守护未生效：CLI 竟以 0 退出');
   assert.ok(res.stderr.includes('扫描失败，未写出文件'), res.stderr);
-  assert.strictEqual(fs.readFileSync(artifact, 'utf8'), before, '守护未生效：projects.json 被空数组覆盖了');
+  assert.strictEqual(readArtifact(), before, '守护未生效：projects.json 被覆盖，或在缺它的机器上被凭空创建');
 });
 
 test('深层第一方源码不被丢弃；非标准 vendored 目录与压缩库被拦', () => {

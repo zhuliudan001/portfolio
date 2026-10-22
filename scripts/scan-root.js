@@ -71,14 +71,17 @@ function pick(opts = {}) {
   // 打错一个字母得到一个「构建成功但扫错仓库」的产物，比报错难查得多。
   // 不在失败那一刻抛 —— 那样会吞掉下面「三条都不成立」的汇总报错（那是另一条契约）。
   let explicitFailure = null;
+  // 失败记录只构造一次：既进汇总清单，也在显式来源时留下那一条可点名的事实。
+  // toAbs 失败时没有 abs 可报，只能报原样写的 c.dir（那正是唯一有意义的形状）。
+  const note = (c, dir, why) => {
+    const rec = { source: c.source, dir, why };
+    tried.push(rec);
+    if (c.source !== 'default' && !explicitFailure) explicitFailure = rec;
+  };
   for (const c of candidates(opts)) {
     let abs;
     try { abs = toAbs(c.dir, c.base || PORTFOLIO_DIR); }
-    catch (e) {
-      tried.push({ source: c.source, dir: c.dir, why: `路径无法解析（${e.code || e.message}）` });
-      if (c.source !== 'default' && !explicitFailure) explicitFailure = { source: c.source, dir: c.dir, why: `路径无法解析（${e.code || e.message}）` };
-      continue;
-    }
+    catch (e) { note(c, c.dir, `路径无法解析（${e.code || e.message}）`); continue; }
     const verdict = inspect(abs);
     if (verdict.ok) {
       if (explicitFailure) {
@@ -87,8 +90,7 @@ function pick(opts = {}) {
       }
       return { root: abs, source: c.source };
     }
-    tried.push({ source: c.source, dir: abs, why: verdict.why });
-    if (c.source !== 'default' && !explicitFailure) explicitFailure = { source: c.source, dir: abs, why: verdict.why };
+    note(c, abs, verdict.why);
   }
   // 以下汇总报错（remedies + tried）保持原样，一字不改。
   const remedies = [

@@ -1,0 +1,9 @@
+# 行尾一律 LF。这条不是风格问题：gate.test.js 的交付物锁是「盘上 11 份产物与重新生成逐字节一致」，
+# 没有本文件时它挂在各人 clone 的 core.autocrlf 上 —— 大仓根原有 `* text=auto`，迁仓时没跟过来。
+* text=auto eol=lf
+# 图片按二进制存，别让换行转换动它一个字节
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary

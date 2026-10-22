@@ -9,7 +9,8 @@ const SITE = {
   /* about 是自我介绍，不是仓库统计：这里不写「多少个工程 / 多少页 / 几类业务」那类数字，
      它们由 scan.js + curate.js 实测派生，出现在精选项目与技术栈旁边才有意义。
      曾经那句「84 个 uni-app 工程、51 个项目跑着同一套 request/ajax.js」的每个数字都可复算，
-     复算口径与踩过的坑记在 docs/superpowers/specs/ 的追加段与 .superpowers/sdd 台账里，需要时可以查回来。
+     复算口径与踩过的坑记在 docs/superpowers/specs/ 的追加段里（仓内可查）；逐次任务的 SDD 台账在 .superpowers/sdd/，
+     那目录迁仓后不再入库、只在本机 —— 别在这份仓里找它。
      另有一条硬约束：SITE 里任何散文都不许出现 YYYY-MM-DD 字面量（tests/content.test.js 钉住），
      日期一律由扫描的 lastCommit 渲染。 */
   about: '我是前端工程师，主要做小程序与 H5 的跨端开发。'
