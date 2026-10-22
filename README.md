@@ -4,8 +4,11 @@
 
 ## 用法
 
-**clone 完的顺序是 scan → build → test，不能跳。** `data/projects.json` 是扫描派生物、不入库：
-`tests/scan.test.js` 直接读它，`gate.test.js` 经 `build.js` 间接读它，先跑 `scan.js` 才有东西可测。
+**`build` 与 `test` 都不依赖 `data/projects.json`。** 它们是现扫扫描根的 —— `build.js` 直接调 `scan.js`
+的 `scanProjects()`，全仓唯一读那个 JSON 的是 `tests/scan.test.js` 里「守护不许写盘」那条用例，而它在文件
+缺席时按「也不许凭空建出来」断言。`scan.js` 写下的是一份给人核数的快照：想复核产物上的数字就得先跑它，
+但不跑也照样能构建与测试。实测（把它移走）：全量 122 pass / 0 fail，`node scripts/build.js` 退出码 0
+且没有把它重建出来，聚合哈希不变。
 
 node scripts/scan.js      # 只读扫描「扫描根」（见下一节）→ data/projects.json
 node scripts/build.js     # 生成 index.html 与 case/*.html

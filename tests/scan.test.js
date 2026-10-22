@@ -149,6 +149,9 @@ test('批量 git 归属对真实历史正确：多个目录的 commits/lastCommi
   const dirs = ['水利地图', '体检', '数字人才签约码', 'xcx-master', 'portfolio'];
   for (const d of dirs) {
     const list = perDir(d);
+    // 抽样必须真有其历史，否则两边都落到 0/'' —— 比对恒真、测不到东西却照样绿。
+    // 大仓顶层目录名是对作品集的契约（AGENTS.md 已写明），这条就是把它被破坏时的静默空转变红灯。
+    assert.ok(list.length > 0, `对照不成立：抽样目录 ${d} 在大仓没有任何提交历史，这条比对什么都没测`);
     const want = { lastCommit: list[0] || '', commits: list.length };
     const got = map.get(d) || { lastCommit: '', commits: 0 };
     assert.deepStrictEqual(got, want, `目录 ${d} 的批量归属与逐目录 git log 不符`);

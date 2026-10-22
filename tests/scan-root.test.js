@@ -192,8 +192,9 @@ test('显式配置文件指向不可扫目录时同样抛，且报错点名 loca
 
 test('scripts/ 全目录都不得自己算上级的扫描根，一律走解析器', () => {
   const dir = path.resolve(__dirname, '../scripts');
-  // 解析器是唯一被允许做上级展开的文件；其余 .js（含今后新建的）全部纳管。
+  // 解析器是唯一被允许做上级展开的文件；同目录及其一层子目录里的每个 JS 都纳管。
   // 旧写法是硬写两个文件名 —— 那等于「8 个脚本守 2 个」，新加一个脚本就能悄悄长出第二处计算。
+  // 纳管扩展名含 .cjs/.mjs：本仓的测试 stub 就用 .cjs；.ps1 不在 JS 语法内，另说。
   const OWNER = 'scan-root.js';
   for (const rel of ['scan.js', 'build.js']) {
     const src = fs.readFileSync(path.join(dir, rel), 'utf8');
@@ -202,9 +203,24 @@ test('scripts/ 全目录都不得自己算上级的扫描根，一律走解析�
   const hitLines = (src) => src.split('\n')
     .map((line, i) => (computesTwoLevels(line) ? i + 1 : 0))
     .filter((n) => n > 0);
-  const offenders = fs.readdirSync(dir)
-    .filter((f) => f.endsWith('.js') && f !== OWNER)
-    .map((f) => ({ file: f, lines: hitLines(fs.readFileSync(path.join(dir, f), 'utf8')) }))
+  const walk = (d, prefix) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => {
+    const rel = prefix ? `${prefix}/${e.name}` : e.name;
+    if (e.isDirectory()) return walk(path.join(d, e.name), rel);        // 只递归一层以上由递归本身覆盖
+    return /\.(js|cjs|mjs)$/.test(e.name) ? [rel] : [];
+  });
+  const files = walk(dir, '');
+  const ownerHits = hitLines(fs.readFileSync(path.join(dir, OWNER), 'utf8'));
+  // 「唯一所有者」不能只靠文件名豁免：那个文件自己也可以长出第二处不同形状的展开。
+  // 钉的是「恰好一条，且它就是 DEFAULT_ROOT 那行」—— 不钉行号（注释加一行就会误红）。
+  assert.strictEqual(ownerHits.length, 1,
+    `解析器 ${OWNER} 里的上级展开应恰好一处（现命中 ${ownerHits.length} 处：行 ${ownerHits.join(',')}）。`
+      + ' 多于一条 = 同一个所有者里两套根；一条都没有 = 默认值不再来自上两级，README 的第三条与全仓的默认行为都失实。');
+  const ownerLine = fs.readFileSync(path.join(dir, OWNER), 'utf8').split('\n')[ownerHits[0] - 1];
+  assert.ok(/DEFAULT_ROOT/.test(ownerLine),
+    `${OWNER} 唯一那处上级展开（第 ${ownerHits[0]} 行）必须是 DEFAULT_ROOT 的定义，实际是：${ownerLine.trim()}`);
+  const offenders = files
+    .filter((rel) => rel !== OWNER)
+    .map((rel) => ({ file: rel, lines: hitLines(fs.readFileSync(path.join(dir, rel), 'utf8')) }))
     .filter((e) => e.lines.length > 0);
   assert.deepStrictEqual(offenders, [],
     `这些脚本仍自己算上级的根（命中行号点名）：${offenders.map((e) => `${e.file}:${e.lines.join(',')}`).join(' ')}\n`
@@ -276,23 +292,33 @@ test('tests/ 里不得再出现第二处扫描根计算', () => {
    旧位置「配置文件存在」本身就是脏（会把套件带走扫别处）；新位置它是必需项，
    于是真正会骗人的形状变成「env 与配置文件同时存在且指向不同目录」—— 解析器按优先级取 env，
    开发者以为自己在测配置文件指的那个仓。终审裁定：这条必须在新家仍然会咬，不许永久空转。 */
+const PORTFOLIO_ROOT = path.resolve(__dirname, '..');
+// 两侧都过 realpath 再比，且按大小写不敏感比：解析器自己就是这么归一的（toAbs 走 realpathSync）。
+// 用裸字符串比会偏严假红 —— 盘符大小写、8.3 短名、junction 指向同一仓都会被当成矛盾。
+const asRootKey = (p, base) => {
+  const abs = path.resolve(base, p);
+  let real;
+  try { real = fs.realpathSync(abs); } catch (e) { real = abs; }
+  return process.platform === 'win32' ? real.toLowerCase() : real;
+};
 test('测试必须在干净扫描环境下跑', (t) => {
   // 断言读的是本文件加载时的快照 ENV_AT_LOAD / CONFIG_ROOT_AT_LOAD，不是测试体执行时的实时值：
   // 守卫生命周期锚在「import 期解析有没有被污染」，同文件其它用例会临时改这两个来源。
-  const envRoot = (ENV_AT_LOAD && ENV_AT_LOAD.trim())
-    ? path.resolve(ENV_AT_LOAD.trim()) : null;
+  const envRoot = (ENV_AT_LOAD && ENV_AT_LOAD.trim()) ? asRootKey(ENV_AT_LOAD.trim(), PORTFOLIO_ROOT) : null;
   if (CONFIG_AT_LOAD && CONFIG_ROOT_AT_LOAD === 'unreadable') {
     throw new Error(`${LOCAL_CONFIG_FILE} 存在却读不出非空的 root —— 它必须是 {"root": "路径"}。`
       + '坏配置文件会连同 env 一起把 import 期解析炸掉，先修它再跑套件。');
   }
-  const cfgRoot = CONFIG_AT_LOAD ? CONFIG_ROOT_AT_LOAD : null;
+  const cfgRoot = CONFIG_AT_LOAD ? asRootKey(CONFIG_ROOT_AT_LOAD, path.dirname(LOCAL_CONFIG_FILE)) : null;
   if (envRoot && cfgRoot && envRoot !== cfgRoot) {
     throw new Error(`两条显式来源指向不同仓库：${SCAN_ROOT_ENV}=${envRoot} 而 ${LOCAL_CONFIG_FILE} → ${cfgRoot}。`
       + '解析器会取 env，于是同一套件测的不是你以为的那个仓库 —— 二者留一个，或把它们对齐。');
   }
   if (!envRoot && !cfgRoot && !fs.existsSync(path.join(DEFAULT_ROOT, '.git'))) {
-    throw new Error(`两条显式来源都没有，而默认值 ../.. = ${DEFAULT_ROOT} 也不是 git 仓库：`
+    throw new Error(`两条显式来源都没有，而默认值上两级 = ${DEFAULT_ROOT} 也不是 git 仓库：`
       + `按 README 设 ${SCAN_ROOT_ENV} 或写 ${LOCAL_CONFIG_FILE} 再跑。`);
   }
+  // 已知盲区（终审复算，非本报告夸大）：只有一条显式来源、而它指向另一份「同样可扫」的 clone 时，
+  // 本判据无从判断 —— 它与期望仓字面不同却没有对照物。那种状态里唯一信号就是下面这行打印出来的根。
   return t.diagnostic(`扫描根来源：${envRoot ? `env=${envRoot}` : (cfgRoot ? `config=${cfgRoot}` : `default=${DEFAULT_ROOT}`)}`);
 });
