@@ -1,0 +1,8 @@
+# 本机扫描根（指向被扫描的兄弟项目仓库），换机器各自指自己的路
+scan-root.local.json
+# 视觉核验暂存目录，收尾即删
+.probe-shark/
+# 迁仓工作区（任务简报 / 实现报告 / 评审 diff / SDD 台账）：本机留档，不进公开历史
+.superpowers/
+# 扫描派生数据：含被扫仓库全部项目目录名与提交日期，由 node scripts/scan.js 现生
+data/projects.json

@@ -1,0 +1,215 @@
+/* 设计系统：源自 preetsuthar.me/style.css 的 token 与版式，为中文做三处调整
+   1) --label 112px → 88px（中文标签仅 2–4 字）
+   2) line-height 1.6 → 1.7（汉字无降部，需更多行距）
+   3) 字栈补 PingFang SC / Microsoft Yahei
+   其余（760px 栏宽、14px/450、虚线规则、.index hover 整行反白、.hl/.ul）保持原样。 */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #fff;
+  --fg: #111;
+  --muted: #767676;
+  --rule: #e6e6e6;
+  --label: 88px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #0e0e0e; --fg: #ececec; --muted: #8e8e8e; --rule: #262626; }
+}
+
+.case-study { --label: 150px; }
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell,
+    "Open Sans", "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Microsoft Yahei", sans-serif;
+  tab-size: 4;
+}
+
+body {
+  width: 100%;
+  max-width: 760px;
+  min-height: 100vh;
+  margin: auto;
+  padding: 4rem 2rem;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 450;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, p, li { font-size: inherit; font-weight: inherit; }
+a { color: inherit; text-decoration: none; }
+:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+img, picture, svg { display: block; max-width: 100%; height: auto; }
+
+.muted { color: var(--muted); }
+
+.hl {
+  padding: 0 0.15em;
+  background: var(--fg);
+  color: var(--bg);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.ul {
+  text-decoration: underline;
+  text-decoration-color: var(--rule);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.22em;
+  transition: text-decoration-color 150ms ease-out;
+}
+
+/* 巡游鲨鱼：固定铺满视口、不吃指针、永远在正文之下。
+   定位元素默认会盖在普通流之上，所以正文必须显式抬一层，否则鲨鱼会糊在字上。 */
+.shark {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  display: block;
+  pointer-events: none;
+}
+.masthead, main { position: relative; z-index: 1; }
+
+/* 版式：标签列 + 内容列 */
+.masthead {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 14px;
+  align-items: center;
+  margin-bottom: 4rem;
+  padding-left: var(--label);
+}
+.masthead .avatar { grid-column: 1; grid-row: 1 / span 2; }
+.masthead h1, .masthead p { grid-column: 2; }
+.masthead h1 { font-size: 18px; font-weight: 500; line-height: 1.3; letter-spacing: -0.01em; }
+.masthead p { color: var(--muted); }
+.avatar { width: 48px; height: 48px; object-fit: cover; background: var(--rule); }
+
+.row { display: grid; grid-template-columns: var(--label) 1fr; align-items: baseline; }
+.row + .row {
+  margin-top: 2rem;
+  padding-top: 2rem;
+  background-image: linear-gradient(to right, var(--rule) 50%, transparent 50%);
+  background-size: 12px 1px;
+  background-repeat: repeat-x;
+}
+.row h2 { color: var(--muted); padding-right: 1.5rem; }
+.row p + p { margin-top: 0.9rem; }
+
+.index { list-style: none; margin: -0.45rem 0; }
+.index li + li {
+  background-image: linear-gradient(to right, var(--rule) 50%, transparent 50%);
+  background-size: 6px 1px;
+  background-repeat: repeat-x;
+}
+.index a, .index .cell {
+  display: grid;
+  grid-template-columns: 2.25rem 8.5rem 1fr auto;
+  gap: 0 1rem;
+  align-items: baseline;
+  margin: 0 -0.5rem;
+  padding: 0.45rem 0.5rem;
+}
+.num, .role, .group { color: var(--muted); font-variant-numeric: tabular-nums; }
+.role { text-align: right; white-space: nowrap; }
+.client { color: var(--accent); }
+
+.plain { list-style: none; }
+.plain li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0 1rem; }
+.plain li + li { margin-top: 0.4rem; }
+
+.group { margin: 1.6rem 0 0.4rem; }
+.group:first-child { margin-top: 0; }
+.stats { color: var(--muted); margin-bottom: 1rem; }
+
+@media (hover: hover) and (pointer: fine) {
+  .index a:hover { background: var(--accent); color: var(--bg); }
+  .index a:hover .num, .index a:hover .client, .index a:hover .title, .index a:hover .role { color: inherit; }
+  .ul:hover { text-decoration-color: currentColor; }
+  .back:hover { color: var(--fg); }
+}
+
+/* 详情页 */
+.case-study .masthead, .cs-title { padding-left: var(--label); }
+.cs-head { display: grid; grid-template-columns: var(--label) 1fr; align-items: baseline; margin-bottom: 1rem; }
+.back {
+  justify-self: start;
+  padding: 0.1rem 0.55rem;
+  border: 1px solid var(--rule);
+  color: var(--muted);
+  font-size: 13px;
+}
+/* 中文项目名/ISO 日期在窄屏需要整项换行，不能按字/连字符断行；宽屏放得下时 wrap 不改变任何几何 */
+.cs-line { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.75rem; }
+.cs-key { color: var(--muted); }
+.cs-company { color: var(--accent); }
+.cs-meta { margin-left: auto; color: var(--muted); text-align: right; }
+hr.dashed {
+  height: 1px;
+  margin: 0 0 2rem;
+  border: 0;
+  background-image: linear-gradient(to right, var(--rule) 50%, transparent 50%);
+  background-size: 12px 1px;
+}
+.case-study h1 { margin-bottom: 4rem; font-size: 18px; font-weight: 500; line-height: 1.3; letter-spacing: -0.01em; }
+
+/* 每个精选项目的 accent */
+.c-feiying-media { --accent: #b45309; }
+.c-xiyou-space { --accent: #0f766e; }
+.c-shengxian-mall { --accent: #15803d; }
+.c-lingmao-health { --accent: #be185d; }
+.c-zhendongli { --accent: #166534; }
+.c-ershoufang-wangqian { --accent: #1d4ed8; }
+.c-yiren-yibao { --accent: #0e7490; }
+.c-gangao-rentcar { --accent: #c2410c; }
+.c-pindou-mini { --accent: #a21caf; }
+.c-shuili-map { --accent: #3f6212; }
+
+@media (prefers-color-scheme: dark) {
+  .c-feiying-media { --accent: #fbbf24; }
+  .c-xiyou-space { --accent: #2dd4bf; }
+  .c-shengxian-mall { --accent: #4ade80; }
+  .c-lingmao-health { --accent: #f472b6; }
+  .c-zhendongli { --accent: #86efac; }
+  .c-ershoufang-wangqian { --accent: #60a5fa; }
+  .c-yiren-yibao { --accent: #22d3ee; }
+  .c-gangao-rentcar { --accent: #fb923c; }
+  .c-pindou-mini { --accent: #e879f9; }
+  .c-shuili-map { --accent: #a3e635; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shark { display: none; }
+}
+
+@media (max-width: 640px) {
+  :root, .case-study { --label: 0px; }
+  body { padding: 3.5rem 1rem 3rem; }
+  .masthead { margin-bottom: 3rem; }
+  .row { grid-template-columns: 1fr; gap: 0.4rem; }
+  .row h2 { padding-right: 0; }
+  /* 窄屏轨道调换：client 用 auto 保住自身宽度，meta 用 1fr 自行折行，
+     否则长中文 meta（nowrap）会把 client 挤到 46px / 6 行（C4）。 */
+  .index a, .index .cell { grid-template-columns: 2.25rem auto 1fr; }
+  .index .title { grid-column: 2 / -1; color: var(--muted); }
+  .index .role { grid-column: 3; grid-row: 1; min-width: 0; white-space: normal; }
+  .cs-head { grid-template-columns: 1fr; gap: 2rem; }
+  .case-study h1 { margin-bottom: 2.5rem; font-size: 17px; }
+}
+
+@media print {
+  :root { --bg: #fff; --fg: #111; --muted: #555; --rule: #bbb; }
+  .case-study { --label: 150px; }
+  body { padding: 0; max-width: none; font-size: 12px; }
+  .row + .row, .index li + li, hr.dashed { background-image: none; border-top: 1px solid var(--rule); }
+  .client, .cs-company { color: var(--fg); }
+  .index a { color: var(--fg); }
+  .back { display: none; }
+  .shark { display: none; }
+}
