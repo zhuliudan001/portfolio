@@ -6,3 +6,5 @@ scan-root.local.json
 .superpowers/
 # 扫描派生数据：含被扫仓库全部项目目录名与提交日期，由 node scripts/scan.js 现生
 data/projects.json
+# 逐次执行计划（含本机路径与其它项目名的过程记录）：只在本机，不进公开历史
+docs/superpowers/plans/

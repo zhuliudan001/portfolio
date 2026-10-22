@@ -24,7 +24,7 @@ python -m http.server 8080 # 或直接双击 index.html（file:// 可用）
 统计数字来自扫描另一个仓库（默认假设 portfolio 住在它下面一层）。三种指定方式，按优先级：
 
 1. 环境变量 `PORTFOLIO_SCAN_ROOT=/绝对/路径/到/被扫描仓库`
-2. 在 portfolio 根写未跟踪的 `scan-root.local.json`：`{"root": "D:/开发/ke-xianyongs-project"}`
+2. 在 portfolio 根写未跟踪的 `scan-root.local.json`：`{"root": "<被扫描仓库的绝对路径>"}`（Windows 里用 `/` 或转义反斜杠）
 3. 什么都不做 —— 退回 `../..`（仅当 portfolio 仍在被扫描仓库内时成立）
 
 三条都不成立时，凡在加载期解析扫描根的（`scan.js`、`build.js` 及其调用方测试）都会抛错并列出上面三条；
